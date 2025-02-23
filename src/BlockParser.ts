@@ -35,9 +35,12 @@ class MarkdownBlockParser {
             //这里删去了.trim()，会发生什么呢？
             const line = this.lines[i];
             this.lineNow = line;
+
+            //如果是标题
             if(this.isHeading(line)) {
                 this.parseHeading(line);
             }
+            //如果是无序列表
             else if(this.isUoList(line)){
 
                 //先push外围的元素
@@ -66,9 +69,35 @@ class MarkdownBlockParser {
                 i = j - 1;
 
             }
+            else if(this.isList(line)){
+                //先push外围的元素
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'ordered_list_start',
+                    tag: `<ol>`,
+                    block: true
+                });
+
+                //挑出有序列表中的每一列
+                let j = 0;
+                for(let j = i; (j < this.lines.length) && /^\d\.\s/.test(this.lines[j]); j++){
+                    const subLine = this.lines[j];
+
+                    this.parseList(subLine);
+                }
+
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'ordered_list_start',
+                    tag: `</ol>`,
+                    block: true
+                });
+            }
+            //如果是块引用
             else if(this.isBlockquote(line)){
                 this.parseBlockQuote(line);
             }
+            //如果是代码块
             else if(this.isCodeBlock(line)){
 
                 this.tokens.push({
@@ -84,7 +113,6 @@ class MarkdownBlockParser {
                     const subLine = this.lines[j];
 
                     this.parseCodeBlock(subLine);
-
                 }
 
                 this.tokens.push({
@@ -95,6 +123,77 @@ class MarkdownBlockParser {
                 });
                 i = j - 1;
             }
+            //如果是水平线
+            else if(this.isLine(line)){
+                this.parseLine(line);
+            }
+            //如果是表格
+            else if(this.isTable(line, i)){
+                //先push外围的元素
+
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'table',
+                    tag: `<table>`,
+                    block: true
+                });
+
+                //此处开始列举每列的对齐方式
+                const newLine = this.lines[i+1].slice(1, -1);
+                const preStyle = newLine.split('|');
+
+                const styles = preStyle.map((str) => {
+                    const newStr = str.trim();
+                    if(newStr.startsWith(':') && !newStr.endsWith(':')){
+                        return 'text-align:left';
+                    }
+                    else if(newStr.endsWith(':') && !newStr.startsWith(':')) {
+                        return 'text-align:right';
+                    }
+                    else if(newStr.endsWith(':') && newStr.startsWith(':')) {
+                        return 'text-align:center'
+                    }
+                    else {
+                        return '';
+                    }
+                })
+
+                //先推送表头的token
+                this.parseTHead(line, styles);
+
+                //再推送表格体的token
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'tbody',
+                    tag: `<tbody>`,
+                    block: true
+                });
+
+                //挑出表格的行
+                let j = 0;
+                for(j = i + 2; (j < this.lines.length) && (/^(\|\s.*\s){1,}\|$/.test(this.lines[j])); j++){
+                    const subLine = this.lines[j];
+
+                    this.parseTable(subLine, styles);
+                }
+
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'tbody',
+                    tag: `</tbody>`,
+                    block: true
+                });
+
+                this.tokens.push({
+                    ...this.initToken,
+                    type: 'table',
+                    tag: `</table>`,
+                    block: true
+                });
+
+                i = j - 1;
+            }
+            //普通文字段
             else {
                 this.parseParagraph(line);
             }
@@ -107,15 +206,36 @@ class MarkdownBlockParser {
     }
 
     isUoList(line: string): boolean {
-        return /^-\s|\*\s|\+\s/.test(line);
+
+        return (line.startsWith('- ') || line.startsWith('+ ') || line.startsWith('* '));
+    }
+
+    isList(line: string): boolean {
+        return (line.startsWith('1. '));
     }
 
     isBlockquote(line: string): boolean {
-        return /^>{1, 3}\s/.test(line);
+        return /^>{1,3}\s/.test(line);
     }
 
     isCodeBlock(line: string): boolean {
         return (line.startsWith('    ') || line.startsWith('\t'));
+    }
+
+    isLine(line: string): boolean {
+        return /^-{3,}$|^\*{3,}$|^_{3,}$/.test(line);
+    }
+
+    isTable(line: string, pos: number): boolean {
+        //首先进行标题的匹配
+        //注意是否进行结尾匹配
+        if(/^(\|.*){1,}\|$/.test(line)) {
+            //现在进行第二行的标题匹配
+            if(pos+1 < this.lines.length && (/^(\|\s*((-{3,})|(:-{3,})|(:-{3,}:)|(-{3,}:))\s*){1,}\|$/.test(this.lines[pos+1]))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     parseHeading(line: string) {
@@ -151,7 +271,7 @@ class MarkdownBlockParser {
     }
 
     parseBlockQuote(line: string) {
-        const level = line.match(/^#{1,3}/)?.[0].length || 1;
+        const level = line.match(/^>{1,3}/)?.[0].length || 1;
         this.lineNow = line.slice(level+1);
         this.tokens.push({
             ...this.initToken,
@@ -192,7 +312,120 @@ class MarkdownBlockParser {
             block: true
         });
 
+    }
+
+    parseList(line: string) {
+        this.tokens.push({
+            ...this.initToken,
+            type: 'list_start',
+            tag: `<li>`,
+            block: true
+        });
+
+        this.lineNow = line.slice(2);
+
+        this.Inline(this.lineNow);
+
+        this.tokens.push({
+            ...this.initToken,
+            type: 'list_start',
+            tag: `</li>`,
+            block: true
+        });
+    }
+
+    parseLine(line: string) {
+        this.tokens.push({
+            ...this.initToken,
+            type: 'horizontal_rule',
+            tag: `<hr />`,
+            block: true
+        });
+    }
+
+    parseTHead(line: string, styles: Array<string>) {
+        //先删除首尾两条竖线
+        const newLine = line.slice(1, -1);
+
+        const headings = newLine.split('|');
+
+        this.tokens.push({
+            ...this.initToken,
+            type: 'tablehead',
+            tag: `<thead>`,
+            block: true
+        });
+
+        for(let k = 0; k < headings.length; k++){
+            let styledTag = '';
+            styles[k] === '' ? styledTag = '<th>' : styledTag = `<th style="${styles[k]}">`;
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'th',
+                tag: styledTag,
+                block: true
+            });
+
+            this.Inline(headings[k]);
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'th',
+                tag: `</th>`,
+                block: true
+            });
         }
+
+        this.tokens.push({
+            ...this.initToken,
+            type: 'tablehead',
+            tag: `</thead>`,
+            block: true
+        });
+
+    }
+
+    parseTable(line: string, styles: Array<string>) {
+        const newLine = line.slice(1, -1);
+
+        const headings = newLine.split('|');
+
+        this.tokens.push({
+            ...this.initToken,
+            type: 'table_row',
+            tag: `<tr>`,
+            block: true
+        });
+
+        for(let k = 0; k < headings.length; k++){
+            let styledTag = '';
+            styles[k] === '' ? styledTag = '<td>' : styledTag = `<td style="${styles[k]}">`;
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'td',
+                tag: styledTag,
+                block: true
+            });
+
+            this.Inline(headings[k]);
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'td',
+                tag: `</td>`,
+                block: true
+            });
+        }
+
+        this.tokens.push({
+            ...this.initToken,
+            type: 'table_row',
+            tag: `</tr>`,
+            block: true
+        });
+    }
 
     parseParagraph(line: string) {
         this.tokens.push({
@@ -224,7 +457,7 @@ class MarkdownBlockParser {
         })
 
         /* ** | __ | * | _ | []() | ![]() | `` */
-        const pattern = /(\*\*.*?\*\*)|(__.*?__)|(\*.*?\*)|(_.*?_)|\[(.*?)\]\((.*?)\)|!\[(.*?)\]\((.*?)\)|`(.*?)`/g;
+        const pattern = /(\*\*.*?\*\*)|(__.*?__)|(\*.*?\*)|(_.*?_)|(\[(.*?)\]\((.*?)\))|(!\[(.*?)\]\((.*?)\))|(`(.*?)`)|(~~.*?~~)/g;
         let match;
         let lastIndex = 0;
 
@@ -282,6 +515,9 @@ class MarkdownBlockParser {
         }
         else if(match.startsWith('`')) {
             return ['code', match.slice(1, -1), 'code'];
+        }
+        else if(match.startsWith('~~')) {
+            return ['delete_line', match.slice(2, -2), 's'];
         }
         else {
             return ['text', match, ''];

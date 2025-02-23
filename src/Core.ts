@@ -24,16 +24,8 @@ class markdownCore {
         this.html = render.Rendering();
 
         return this.tokens;
-        
     }
     
 }
-const test = '- list 1\n- list 2\nnormal p';
-const core = new markdownCore(test);
-const tokens = core.coreParse();
-console.log(tokens);
-console.log(tokens[1].children);
-
-console.log(core.html);
 
 export default markdownCore;
