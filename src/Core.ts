@@ -29,3 +29,5 @@ class markdownCore {
 }
 
 export default markdownCore;
+
+module.exports = markdownCore;
