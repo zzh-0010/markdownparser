@@ -242,7 +242,7 @@ class MarkdownBlockParser {
     }
 
     isImage(line: string): boolean {
-        return /!\[(.*?)\]\((.*?)\)/.test(line);
+        return /^!\[(.*?)\]\((.*?)\)|^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)/.test(line);
     }
 
     parseHeading(line: string) {
@@ -436,17 +436,53 @@ class MarkdownBlockParser {
 
     parseImage(line: string) {
         const rowContent = line;
-        const splitSign = rowContent.indexOf('!](');
-        const info = rowContent.slice(0, splitSign);
-
-        const other = [rowContent.slice(splitSign + 3, rowContent.indexOf(' ', splitSign)), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
+        let splitSign = rowContent.indexOf('](');
+        let info = '';
+        let other = [];
+        let link = '';
+        if(line.startsWith('!')) {
+            //不带链接的图片
+            info = rowContent.slice(2, splitSign);
+        }
+        else {
+            //带链接的图片
+            //需要在联机和图片断开
+            const ilSplit = rowContent.indexOf(')](');
+            info = rowContent.slice(3, splitSign);
+            link = rowContent.slice(ilSplit + 3, -1);
+        }
+        other = [rowContent.slice(splitSign + 2, rowContent.indexOf(' ', splitSign)), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
         
-        this.tokens.push({
-            ...this.initToken,
-            type: 'image',
-            tag: `<image src=${other[0]} alt=${info}>`,
-            block: true
-        });
+        if(link) {
+            this.tokens.push({
+                ...this.initToken,
+                type: 'link_image',
+                tag: `<a href="${link}">`,
+                block: true
+            });
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'image_lin',
+                tag: `<image src=${other[0]} alt=${info}>`,
+                block: true
+            });
+
+            this.tokens.push({
+                ...this.initToken,
+                type: 'image_image',
+                tag: `</a>`,
+                block: true
+            });
+        }
+        else {
+            this.tokens.push({
+                ...this.initToken,
+                type: 'image',
+                tag: `<image src=${other[0]} alt=${info}>`,
+                block: true
+            });
+        }
     }
 
     parseParagraph(line: string) {
@@ -527,7 +563,7 @@ class MarkdownBlockParser {
         else if(match.startsWith('*') || match.startsWith('_')) {
             return ['italic', match.slice(1, -1), 'em'];
         }
-        else if(match.startsWith('[')) {
+        else if(match.startsWith('[') && !match.startsWith('[!')) {
             //这个是否也一样
             return ['link', match.slice(1, -1), 'a'];
         }
