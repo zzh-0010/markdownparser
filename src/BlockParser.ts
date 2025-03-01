@@ -507,7 +507,7 @@ class MarkdownBlockParser {
         }
         else if(match.startsWith('!')) {
             //请注意这里，其渲染成html应当是自闭合标签
-            return ['image', match.slice(2, match.indexOf(']', 2)), 'image'];
+            return ['image', match.slice(2), 'image'];
         }
         else if(match.startsWith('[')) {
             //这个是否也一样
