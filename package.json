@@ -1,6 +1,6 @@
 {
   "name": "markdownparser-zzh",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "./src/Core.ts",
   "scripts": {
     "ts-node": "ts-node",

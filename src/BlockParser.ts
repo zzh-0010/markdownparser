@@ -193,6 +193,9 @@ class MarkdownBlockParser {
 
                 i = j - 1;
             }
+            else if(this.isImage(line)){
+                this.parseImage(line);
+            }
             //普通文字段
             else {
                 this.parseParagraph(line);
@@ -236,6 +239,10 @@ class MarkdownBlockParser {
             }
         }
         return false;
+    }
+
+    isImage(line: string): boolean {
+        return /!\[(.*?)\]\((.*?)\)/.test(line);
     }
 
     parseHeading(line: string) {
@@ -427,6 +434,21 @@ class MarkdownBlockParser {
         });
     }
 
+    parseImage(line: string) {
+        const rowContent = line;
+        const splitSign = rowContent.indexOf('!](');
+        const info = rowContent.slice(0, splitSign);
+
+        const other = [rowContent.slice(splitSign + 3, rowContent.indexOf(' ', splitSign)), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
+        
+        this.tokens.push({
+            ...this.initToken,
+            type: 'image',
+            tag: `<image src=${other[0]} alt=${info}>`,
+            block: true
+        });
+    }
+
     parseParagraph(line: string) {
         this.tokens.push({
             ...this.initToken,
@@ -457,7 +479,7 @@ class MarkdownBlockParser {
         })
 
         /* ** | __ | * | _ | []() | ![]() | `` */
-        const pattern = /(\*\*.*?\*\*)|(__.*?__)|(\*.*?\*)|(_.*?_)|(\[(.*?)\]\((.*?)\))|(!\[(.*?)\]\((.*?)\))|(`(.*?)`)|(~~.*?~~)/g;
+        const pattern = /(\*\*.*?\*\*)|(__.*?__)|(\*.*?\*)|(_.*?_)|(\[(.*?)\]\((.*?)\))|(`(.*?)`)|(~~.*?~~)/g;
         let match;
         let lastIndex = 0;
 
@@ -505,13 +527,9 @@ class MarkdownBlockParser {
         else if(match.startsWith('*') || match.startsWith('_')) {
             return ['italic', match.slice(1, -1), 'em'];
         }
-        else if(match.startsWith('!')) {
-            //请注意这里，其渲染成html应当是自闭合标签
-            return ['image', match.slice(2), 'image'];
-        }
         else if(match.startsWith('[')) {
             //这个是否也一样
-            return ['link', match.slice(1, -1), 'herf'];
+            return ['link', match.slice(1, -1), 'a'];
         }
         else if(match.startsWith('`')) {
             return ['code', match.slice(1, -1), 'code'];
