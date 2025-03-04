@@ -31,7 +31,6 @@ class MarkdownBlockParser {
 
     blockParse(): Token[] {
         for(let i = 0; i < this.lines.length; i++){
-
             //这里删去了.trim()，会发生什么呢？
             const line = this.lines[i];
             this.lineNow = line;
@@ -80,7 +79,7 @@ class MarkdownBlockParser {
 
                 //挑出有序列表中的每一列
                 let j = 0;
-                for(let j = i; (j < this.lines.length) && /^\d\.\s/.test(this.lines[j]); j++){
+                for(j = i; (j < this.lines.length) && (/^\s*\d+\.\s+/.test(this.lines[j])); j++){
                     const subLine = this.lines[j];
 
                     this.parseList(subLine);
@@ -92,6 +91,8 @@ class MarkdownBlockParser {
                     tag: `</ol>`,
                     block: true
                 });
+                i = j - 1;
+                
             }
             //如果是块引用
             else if(this.isBlockquote(line)){
@@ -440,18 +441,21 @@ class MarkdownBlockParser {
         let info = '';
         let other = [];
         let link = '';
+        let ilSplit = 0;
         if(line.startsWith('!')) {
             //不带链接的图片
             info = rowContent.slice(2, splitSign);
+            other = [rowContent.slice(splitSign + 2, rowContent.indexOf(' ', splitSign)), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
         }
         else {
             //带链接的图片
             //需要在联机和图片断开
-            const ilSplit = rowContent.indexOf(')](');
+            ilSplit = rowContent.indexOf(')](');
             info = rowContent.slice(3, splitSign);
             link = rowContent.slice(ilSplit + 3, -1);
+            other = [rowContent.slice(splitSign + 2, ilSplit), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
         }
-        other = [rowContent.slice(splitSign + 2, rowContent.indexOf(' ', splitSign)), rowContent.slice(rowContent.indexOf(' ', splitSign) + 1, -1)];
+
         
         if(link) {
             this.tokens.push({
